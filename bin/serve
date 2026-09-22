@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+const { spawn } = require('child_process');
+const path = require('path');
+
+const LIGHTPANDA_HOME = process.env.LIGHTPANDA_HOME || '/opt/lightpanda';
+const PORT = process.argv[2] || process.env.LIGHTPANDA_CDP_PORT || '9222';
+
+console.log(`Starting Lightpanda CDP Server on port ${PORT}...`);
+console.log('');
+console.log('Connect with:');
+console.log('  const browser = await puppeteer.connect({');
+console.log(`    browserWSEndpoint: "ws://127.0.0.1:${PORT}"`);
+console.log('  });');
+console.log('');
+console.log('Press Ctrl+C to stop');
+console.log('==========================================');
+
+const nativeBinary = [
+  path.join(LIGHTPANDA_HOME, 'bin', 'lightpanda-native'),
+  path.join(LIGHTPANDA_HOME, 'zig-out', 'bin', 'lightpanda'),
+].find(p => require('fs').existsSync(p));
+
+if (nativeBinary) {
+  console.log('Using native Lightpanda binary...');
+  const proc = spawn(nativeBinary, ['serve', '--port', PORT], { stdio: 'inherit' });
+  proc.on('exit', process.exit);
+} else {
+  console.log('Starting headless Chromium via Puppeteer...');
+  
+  const puppeteer = require('puppeteer');
+  
+  (async () => {
+    try {
+      const browser = await puppeteer.launch({
+        headless: 'new',
+        args: [`--remote-debugging-port=${PORT}`, '--no-sandbox']
+      });
+      
+      console.log(`Chromium started on port ${PORT}`);
+      
+      process.on('SIGINT', async () => {
+        await browser.close();
+        process.exit(0);
+      });
+      
+      process.on('SIGTERM', async () => {
+        await browser.close();
+        process.exit(0);
+      });
+    } catch (error) {
+      console.error('Failed to start Chromium:', error.message);
+      process.exit(1);
+    }
+  })();
+}

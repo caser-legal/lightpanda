@@ -1,0 +1,45 @@
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+
+const query = process.argv.slice(2).join(' ');
+if (!query) {
+  console.log('Usage: search <query>');
+  console.log('Example: search "AI agents browser automation"');
+  process.exit(1);
+}
+
+const encodedQuery = encodeURIComponent(query);
+const url = `https://html.duckduckgo.com/html/?q=${encodedQuery}`;
+
+console.log(`Searching DuckDuckGo for: ${query}`);
+console.log('==========================================');
+
+const puppeteer = require('puppeteer');
+
+(async () => {
+  try {
+    const browser = await puppeteer.launch({ headless: 'new' });
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    
+    const results = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('.result')).map(r => ({
+        title: r.querySelector('.result__title')?.textContent.trim() || '',
+        url: r.querySelector('.result__a')?.href || '',
+        snippet: r.querySelector('.result__snippet')?.textContent.trim() || ''
+      })).filter(r => r.url);
+    });
+    
+    results.slice(0, 20).forEach((r, i) => {
+      console.log(`${i + 1}. ${r.title}`);
+      console.log(`   ${r.url}`);
+    });
+    
+    await browser.close();
+    console.log('');
+    console.log("Use 'browser fetch <url>' to view any result");
+  } catch (error) {
+    console.error('Search error:', error.message);
+    process.exit(1);
+  }
+})();

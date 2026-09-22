@@ -1,0 +1,127 @@
+#!/usr/bin/env node
+const { spawn, execSync } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+const LIGHTPANDA_HOME = process.env.LIGHTPANDA_HOME || '/opt/lightpanda';
+const CDP_PORT = process.env.LIGHTPANDA_CDP_PORT || '9222';
+
+function getNativeBinary() {
+  const candidates = [
+    path.join(LIGHTPANDA_HOME, 'bin', 'lightpanda-native'),
+    path.join(LIGHTPANDA_HOME, 'zig-out', 'bin', 'lightpanda'),
+  ];
+  for (const bin of candidates) {
+    if (fs.existsSync(bin)) return bin;
+  }
+  return null;
+}
+
+const commands = {
+  async fetch(url) {
+    console.log(`Fetching: ${url}`);
+    const native = getNativeBinary();
+    if (native) {
+      execSync(`${native} fetch --obey_robots "${url}"`, { stdio: 'inherit' });
+    } else {
+      const puppeteer = require('puppeteer');
+      const browser = await puppeteer.launch({ headless: 'new' });
+      const page = await browser.newPage();
+      await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+      console.log(await page.content());
+      await browser.close();
+    }
+  },
+
+  async serve(port = CDP_PORT) {
+    console.log(`Starting CDP server on port ${port}...`);
+    const native = getNativeBinary();
+    if (native) {
+      execSync(`${native} serve --port ${port}`, { stdio: 'inherit' });
+    } else {
+      const chromeFlags = `--remote-debugging-port=${port} --headless`;
+      try {
+        execSync(`chrome ${chromeFlags} &`, { stdio: 'ignore' });
+        console.log(`Chrome CDP started on port ${port}`);
+      } catch (e) {
+        console.log('Chrome not available. Install Chrome or build Lightpanda.');
+      }
+    }
+  },
+
+  async search(query) {
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    console.log(`Searching: ${query}`);
+    return this.fetch(url);
+  },
+
+  async scrape(url) {
+    console.log(`Scraping: ${url}`);
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({ headless: 'new' });
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    console.log(await page.evaluate(() => document.body.innerText));
+    await browser.close();
+  },
+
+  async links(url) {
+    console.log(`Extracting links from: ${url}`);
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({ headless: 'new' });
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    const links = await page.evaluate(() => 
+      Array.from(document.querySelectorAll('a[href]'))
+        .map(a => ({ text: a.textContent.trim(), href: a.href }))
+        .filter(l => l.href && l.text)
+    );
+    console.log(JSON.stringify(links, null, 2));
+    await browser.close();
+  },
+
+  async eval(script, url) {
+    console.log(`Evaluating script${url ? ' on ' + url : ''}`);
+    const puppeteer = require('puppeteer');
+    const browser = await puppeteer.launch({ headless: 'new' });
+    const page = await browser.newPage();
+    if (url) await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    console.log(await page.evaluate(script));
+    await browser.close();
+  },
+
+  help() {
+    console.log(`
+Lightpanda Browser CLI
+
+Usage: browser <command> [arguments]
+
+Commands:
+  fetch <url>              Fetch URL content
+  serve [port]             Start CDP server (default: 9222)
+  search <query>           Search DuckDuckGo
+  scrape <url>             Extract page content
+  links <url>              Extract all links
+  eval <script> [url]      Execute JavaScript
+`);
+  }
+};
+
+async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0];
+
+  if (!command || command === 'help') {
+    commands.help();
+    process.exit(0);
+  }
+
+  try {
+    await commands[command](...args.slice(1));
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+main();

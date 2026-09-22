@@ -1,0 +1,24 @@
+{
+  "name": "lightpanda-browser",
+  "version": "1.0.0",
+  "description": "Lightpanda headless browser for AI agents",
+  "type": "commonjs",
+  "bin": {
+    "browser": "./bin/browser",
+    "lightpanda-search": "./bin/search",
+    "lightpanda-scrape": "./bin/scrape",
+    "lightpanda-serve": "./bin/serve"
+  },
+  "scripts": {
+    "serve": "node bin/serve",
+    "search": "node lib/agent-browser.js search",
+    "mcp": "node integrations/mcp-server.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0",
+    "ws": "^8.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

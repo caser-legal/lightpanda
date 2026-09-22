@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "lightpanda": {
+      "command": "node",
+      "args": ["/opt/lightpanda/integrations/mcp-server.js"],
+      "env": {
+        "LIGHTPANDA_HOME": "/opt/lightpanda",
+        "LIGHTPANDA_CDP_PORT": "9222"
+      }
+    }
+  }
+}

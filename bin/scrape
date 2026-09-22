@@ -1,0 +1,49 @@
+#!/bin/bash
+# Lightpanda Web Scraper - Extract page content as markdown
+# Usage: scrape <url>
+
+set -e
+
+URL="$1"
+
+if [ -z "$URL" ]; then
+  echo "Usage: scrape <url>"
+  echo "Example: scrape https://example.com"
+  exit 1
+fi
+
+echo "Scraping: $URL"
+echo "=========================================="
+
+# Use node-based scraper if available
+if command -v node &> /dev/null; then
+  node -e "
+const puppeteer = require('puppeteer-core');
+(async () => {
+  const browser = await puppeteer.launch({ headless: 'new' });
+  const page = await browser.newPage();
+  await page.goto('$URL', { waitUntil: 'networkidle0', timeout: 30000 });
+  
+  // Extract clean text content
+  const content = await page.evaluate(() => {
+    // Remove scripts, styles, nav, footer
+    document.querySelectorAll('script,style,nav,footer,header').forEach(e => e.remove());
+    return document.body.innerText;
+  });
+  
+  console.log(content);
+  await browser.close();
+})().catch(err => {
+  console.error('Error:', err.message);
+  process.exit(1);
+});
+"
+else
+  # Fallback to curl + simple parsing
+  curl -s "$URL" | \
+    sed 's/<script[^>]*>.*<\/script>//gi' | \
+    sed 's/<style[^>]*>.*<\/style>//gi' | \
+    sed 's/<[^>]*>//g' | \
+    sed '/^$/d' | \
+    head -100
+fi
